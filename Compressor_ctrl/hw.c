@@ -52,13 +52,13 @@ ISR(TIMER0_OVF_vect)
 	if ((ovf_cnt%20)){
 		return;
 	}
-	if ((t_stop)&&(t_stop+2 == uptime.glob_sec)){
+	if ((t_stop)&&(t_stop+2 <= uptime.glob_sec)){
 		if (input.pd3 == LOW){
 			PORTB &= ~_BV(PB5);
 			t_start = 0;
 			t_work = 0;
 		}
-	} else
+	}
 	if ((!t_stop)&&(input.pd4 == HIGH)){
 		t_stop = uptime.glob_sec;
 	} else
@@ -70,7 +70,7 @@ ISR(TIMER0_OVF_vect)
  			//t_work = 0;
 			//t_start = uptime.glob_sec;
  		}
- 		if ((uptime.glob_sec - t_work) == 10){
+ 		if ((uptime.glob_sec - t_work) == 1800){
  			PORTB &= ~_BV(PB4);
  			//t_work = 0;
  		}
@@ -94,9 +94,15 @@ ISR(TIMER0_OVF_vect)
  	} else
  	
  	if ((input.pd0 == LOW) && (!t_start)){
- 		t_start = uptime.glob_sec;
-		t_stop = 0;
- 		PORTB |= _BV(PB4);
+ 		if ((PINB & _BV(PB4))|(PINB & _BV(PB5))){
+			 PORTB &= 0xcf;
+			 t_start = uptime.glob_sec;
+			 t_stop = 0;
+ 		} else {
+			 t_start = uptime.glob_sec;
+			 t_stop = 0;
+			 PORTB |= _BV(PB4);
+		}
  	}
 }
 
