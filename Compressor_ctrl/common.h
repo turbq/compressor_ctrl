@@ -48,6 +48,14 @@ typedef union
 	};
 }InputStates;
 
+enum states {
+	idle,
+	start,
+	work,
+	failure,
+	stop,
+	};
+
 /*
  *	hw.c prototypes
  */

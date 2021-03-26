@@ -15,7 +15,8 @@ InputStates input;
 
 //sleep flag shows if nothing happens until last pwr_dn increment
 volatile bool f_sleep = true;
-static volatile uint32_t t_start, t_work, t_stop;
+static volatile uint32_t t_start, t_work, t_pd4_ev, t_stop;
+enum states current_state = idle;
 
 ISR(TIMER0_OVF_vect)
 {
@@ -30,12 +31,10 @@ ISR(TIMER0_OVF_vect)
 		uptime.sec++;
 		uptime.pwr_dn++;
 		ovf_cnt = 0;
-		//PINB = 1<<PB5;
 	}
 	if (uptime.sec == 60){
 		uptime.sec = 0;
 		uptime.min++;
-		//PINB = 1<<PB4;
 	}
 	if (uptime.min == 60){
 		uptime.min = 0;
@@ -52,58 +51,69 @@ ISR(TIMER0_OVF_vect)
 	if ((ovf_cnt%20)){
 		return;
 	}
-	if ((t_stop)&&(t_stop+2 <= uptime.glob_sec)){
-		if (input.pd3 == LOW){
-			PORTB &= ~_BV(PB5);
-			t_start = 0;
-			t_work = 0;
-		}
-	}
-	if ((!t_stop)&&(input.pd4 == HIGH)){
-		t_stop = uptime.glob_sec;
-	} else
 	
- 	if (t_work){
- 		if (input.pd0 == LOW){ //pressed start when working => stop
- 			PORTB &= ~_BV(PB4);
- 			//PORTB |= _BV(PB5);
- 			//t_work = 0;
-			//t_start = uptime.glob_sec;
- 		}
- 		if ((uptime.glob_sec - t_work) == 1800){
- 			PORTB &= ~_BV(PB4);
- 			//t_work = 0;
- 		}
-		if (input.pd1 == LOW){
-			PORTB &= ~_BV(PB4);
-			PORTB |= _BV(PB5);
-			t_work = 0;
-		}
- 		f_sleep = false;
- 	} else
- 	
- 	//if start pressed this should exist
- 	if ((t_start) && ((t_start+2)==uptime.glob_sec)){
- 		if (input.pd1 == LOW){
- 			PORTB &= ~_BV(PB4);
-			//PORTB |= _BV(PB5);
- 		} else {
-			t_work = uptime.glob_sec;
-		}
- 		t_start = 0;
- 	} else
- 	
- 	if ((input.pd0 == LOW) && (!t_start)){
- 		if ((PINB & _BV(PB4))|(PINB & _BV(PB5))){
-			 PORTB &= 0xcf;
-			 t_start = uptime.glob_sec;
-			 t_stop = 0;
- 		} else {
-			 t_start = uptime.glob_sec;
-			 t_stop = 0;
-			 PORTB |= _BV(PB4);
-		}
- 	}
+	switch(current_state){
+		case idle:
+			if ((t_stop)&&(t_stop+1 >= uptime.glob_sec))
+				break;
+			if (input.pd0 == LOW){
+				PORTB |= _BV(PB4);
+				
+				t_start = uptime.glob_sec;
+				t_stop = 0;
+				current_state = start;
+			}
+			break;
+		case start:
+			//wait 2 sec before check pd1
+			if (t_start+2 >= uptime.glob_sec)
+				break;
+			if (input.pd1 == LOW){ //failure
+				PORTB &= ~_BV(PB4);
+				current_state = idle;
+			} else { //working fine
+				t_work = uptime.glob_sec;
+				current_state = work;
+			}
+			break;
+		case work:
+			if (input.pd0 == LOW){ //pressed start when working => stop
+				t_work = 0;
+				current_state = stop;
+			}
+			if ((uptime.glob_sec - t_work) >= 1800){ //30 min timeout failure
+				PORTB &= ~_BV(PB4);
+				t_work = 0;
+				current_state = idle;
+			}
+			if (input.pd1 == LOW){
+				PORTB &= ~_BV(PB4);
+				PORTB |= _BV(PB5);
+				t_work = 0;
+			}
+			if (input.pd4 == HIGH){
+				t_pd4_ev = uptime.glob_sec;
+				current_state = stop;
+			}
+			break;
+		case stop:
+			if ((t_pd4_ev)&&(t_pd4_ev + 2 >= uptime.glob_sec)){
+				if (input.pd3 == LOW){
+					t_pd4_ev = 0;
+				} else {
+					t_pd4_ev = uptime.glob_sec;
+				}
+				break;
+			}
+			t_stop = uptime.glob_sec;
+			PORTB &= ~(_BV(PB4) | _BV(PB5));
+			
+			current_state = idle;
+			break;
+		default:
+			break;
+	}
+	
 }
 
 void init_port()
@@ -127,6 +137,9 @@ void init_port()
  */
 void init_tim()
 {	
+	/*
+	 *	Timer 0 initialization
+	 */
 	/* Timer clock = I/O clock 1000000 / 8 = 125000 */
 	TCCR0A = (1<<WGM01)|(1<<WGM00);
 	TCCR0B = (1<<CS01)|(1<<WGM02);
@@ -139,6 +152,7 @@ void init_tim()
 	TIFR = 1<<TOV0;
 	/* Enable Overflow Interrupt */
 	TIMSK = (1<<TOIE0);
+	
 }
 
 void pin_handle(uint8_t pin)
