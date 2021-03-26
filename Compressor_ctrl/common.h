@@ -12,6 +12,7 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
+#include <avr/wdt.h>
 
 /*
  *	Pin config
@@ -64,6 +65,7 @@ void init_tim(void);
 
 void pin_handle(uint8_t);
 void pin_routine(void);
+void state_machine(void);
 
 void hw_init(void);
 
