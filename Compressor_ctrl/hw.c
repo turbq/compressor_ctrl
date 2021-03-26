@@ -13,8 +13,6 @@
 volatile daytime uptime;
 InputStates input;
 
-//sleep flag shows if nothing happens until last pwr_dn increment
-volatile bool f_sleep = true;
 static volatile uint32_t t_start, t_work, t_pd4_ev, t_stop;
 volatile enum states current_state = idle;
 
@@ -22,10 +20,6 @@ ISR(TIMER1_COMPA_vect)
 {
 	static uint16_t cnt = 0;
 	cnt++;
-	if (!f_sleep){//reset pwr_dn counter when some actions executed
-		f_sleep = true;
-		uptime.pwr_dn = 0;
-	}
 	if (cnt == 1000){
 		uptime.glob_sec++;
 		uptime.sec++;
@@ -43,10 +37,6 @@ ISR(TIMER1_COMPA_vect)
 	if (uptime.hour == 24){
 		uptime.hour = 0;
 		uptime.day++;
-	}
-	if (uptime.pwr_dn == 300){ //power down after ~5 mins
-		uptime.pwr_dn = 0;
-		//set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 	}
 	
 	pin_routine();
